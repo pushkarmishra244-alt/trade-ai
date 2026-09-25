@@ -1,257 +1,104 @@
-
 # Trade AI
-
+<div align="center">
 [![CI](https://github.com/pushkarmishra244-alt/trade-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/pushkarmishra244-alt/trade-ai/actions/workflows/ci.yml)
 [![Security](https://img.shields.io/github/actions/workflow/status/pushkarmishra244-alt/trade-ai/security.yml?label=Security)](https://github.com/pushkarmishra244-alt/trade-ai/actions/workflows/security.yml)
 [![Last Commit](https://img.shields.io/github/last-commit/pushkarmishra244-alt/trade-ai)](https://github.com/pushkarmishra244-alt/trade-ai/commits/main)
-
-> Automated trading infrastructure with a hard safety boundary between strategy logic and real-money execution.
-> Automated trading infrastructure with a hard safety boundary between strategy logic and real-money execution.
-Trade AI is a self-hosted algorithmic trading system built around [OpenAlgo](https://github.com/marketcalls/openalgo) and Angel One SmartAPI.
-The project is focused on one problem that matters when automated software is connected to a real brokerage account:
-**What happens when something goes wrong?**
-Trade AI adds an independent, fail-closed safety layer that can stop new orders, cancel pending orders, flatten positions, and permanently latch the system into a `KILLED` state when account safety cannot be verified.
----
-## The Architecture
+[![GitHub Repo](https://img.shields.io/badge/GitHub-Repository-181717?logo=github)](https://github.com/pushkarmishra244-alt/trade-ai)
+</div>
+> Self-hosted algorithmic trading infrastructure with a fail-closed safety layer between strategy execution and real-money brokerage operations.
+Trade AI is a self-hosted trading infrastructure project built around **OpenAlgo** and **Angel One SmartAPI**.
+Its primary purpose is to establish an independent safety boundary between automated strategy logic and live broker execution.
 ```text
-                         ┌─────────────────────┐
-                         │   Trading Strategy  │
-                         │     / Trading Bot   │
-                         └──────────┬──────────┘
-                                    │
-                                    ▼
-                         ┌─────────────────────┐
-                         │      OpenAlgo       │
-                         │   Trading Engine    │
-                         └──────────┬──────────┘
-                                    │
-                                    ▼
-                    ┌──────────────────────────────┐
-                    │       TRADE AI SAFETY        │
-                    │                              │
-                    │  Balance Verification       │
-                    │  Kill Switch                │
-                    │  Order Guard                │
-                    │  Emergency Shutdown         │
-                    │  Persistent Kill State      │
-                    └──────────────┬───────────────┘
-                                   │
-                         ┌─────────┴─────────┐
-                         │                   │
-                         ▼                   ▼
-                  Cancel Orders        Close Positions
-                         │                   │
-                         └─────────┬─────────┘
-                                   │
-                                   ▼
-                         ┌─────────────────────┐
-                         │   Angel One         │
-                         │   SmartAPI          │
-                         └─────────────────────┘
-
-The important design decision is simple:
-
-A trading strategy never gets the final say on whether an order can reach the broker.
-
-⸻
-
-Why Trade AI?
-
-Automated trading software can continue operating long after a human would have noticed that something is wrong.
-
-A strategy can be profitable.
-
-The server can be online.
-
-The API can be responding.
-
-And the system can still be unsafe to trade.
-
-Trade AI therefore treats execution safety as a separate system, rather than something embedded inside individual strategies.
-
-The result is a layered approach:
-
 Strategy
-   ↓
-Execution
-   ↓
-Safety Verification
-   ↓
-Broker
+   │
+   ▼
+OpenAlgo
+   │
+   ▼
+┌─────────────────────────────┐
+│       TRADE AI SAFETY       │
+│                             │
+│  Balance Verification       │
+│  Live Order Guard           │
+│  Kill Switch                │
+│  Background Monitoring      │
+│  Emergency Shutdown         │
+│  Persistent Kill State      │
+└──────────────┬──────────────┘
+               │
+               ▼
+        Angel One SmartAPI
 
-If the safety layer says NO, the order stops there.
+The strategy decides what to trade.
+
+The safety layer decides whether the trade is allowed to reach the broker.
 
 ⸻
 
-Hard Kill Switch
+What is Trade AI?
 
-The core of Trade AI is a persistent kill switch.
+Automated trading systems can continue operating even when their operating conditions are no longer safe.
+
+A strategy may still be running.
+
+The server may still be online.
+
+The broker API may still be responding.
+
+Yet the account state may be unknown or unsafe.
+
+Trade AI treats execution safety as a separate infrastructure layer rather than something that individual strategies must implement themselves.
+
+The system is designed around three principles:
+
+* Fail closed
+* Persist dangerous states
+* Require explicit recovery
+
+If the safety layer cannot reliably verify that trading is safe, live order execution is blocked.
+
+⸻
+
+Core Safety System
+
+Persistent Kill Switch
+
+The kill switch uses a configurable account-balance threshold.
 
 Current threshold:
 
 Available Balance ≤ ₹0
 
-When the threshold is reached:
+When triggered:
 
-ACCOUNT BALANCE
+Account Balance
       │
       ▼
-   ₹0 OR LESS
+ ₹0 OR LESS
       │
       ▼
 ┌───────────────┐
 │ KILL SWITCH   │
-│    TRIGGERED  │
+│   TRIGGERED   │
 └───────┬───────┘
         │
         ├── Block new orders
         ├── Cancel pending orders
-        ├── Close positions
+        ├── Attempt position closing
         ├── Persist KILLED state
         └── Prevent automatic revival
 
-But the system does not only react to a zero balance.
+The kill state is stored persistently and survives application restarts.
 
-It also fails closed when the balance cannot be reliably verified.
-
-For example:
-
-Broker unavailable
-       ↓
-Balance unknown
-       ↓
-Trading BLOCKED
-
-rather than:
-
-Broker unavailable
-       ↓
-Balance unknown
-       ↓
-Trading continues
+Adding funds back to the account does not automatically reactivate trading.
 
 ⸻
 
-Permanent Until Manually Reset
+Fail-Closed Behavior
 
-The kill switch is intentionally latched.
+Trade AI treats an unknown account state as unsafe.
 
-Example:
-
-₹10,000
-   │
-   ▼
-TRADING ACTIVE
-   │
-   ▼
-₹0
-   │
-   ▼
-KILLED
-   │
-   ▼
-₹5,000 deposited
-   │
-   ▼
-STILL KILLED
-
-Adding money back to the account does not automatically restart trading.
-
-A separate reset operation must verify the account and explicitly clear the kill state.
-
-This prevents an unexpected account update from silently reactivating an automated strategy.
-
-⸻
-
-Protected Order Paths
-
-Trade AI currently places safety checks around the major live-order paths:
-
-* Normal orders
-* Basket orders
-* Split orders
-* Smart orders
-
-The broker execution boundary is therefore protected rather than relying on individual strategy authors to remember safety checks.
-
-                Order Request
-                     │
-                     ▼
-             ┌───────────────┐
-             │  Safety Check │
-             └───────┬───────┘
-                     │
-              ┌──────┴──────┐
-              │             │
-            SAFE          BLOCKED
-              │             │
-              ▼             ▼
-          Broker API      Stop
-
-⸻
-
-Emergency Shutdown
-
-When the kill switch transitions into the killed state, Trade AI can initiate an emergency sequence:
-
-1. Cancel pending orders
-
-Prevent outstanding orders from being executed.
-
-2. Flatten positions
-
-Attempt to close currently open positions.
-
-3. Latch the system
-
-Persist:
-
-KILLED
-
-4. Block future orders
-
-Even if the strategy continues running, new live orders remain blocked.
-
-⸻
-
-Background Safety Monitor
-
-The kill switch isn’t dependent on a trading strategy noticing the problem.
-
-Trade AI runs a dedicated background monitor:
-
-services/kill_switch_monitor.py
-
-Current polling interval:
-
-15 seconds
-
-The monitor continuously checks:
-
-* Broker authentication
-* Account availability
-* Available balance
-* Kill-switch state
-
-The monitor runs independently through systemd:
-
-openalgo-kill-switch.service
-
-This means the safety mechanism continues operating independently of the strategy process.
-
-⸻
-
-Fail-Closed by Design
-
-One of the fundamental principles of Trade AI is:
-
-Unknown is not safe.
-
-If the system cannot determine the account state with sufficient confidence, it stops trading.
-
-Examples:
-
-Situation	Trading
+Account State	Trading
 Positive verified balance	Allowed
 Balance = ₹0	Blocked
 Balance < ₹0	Blocked
@@ -260,11 +107,88 @@ Balance API fails	Blocked
 Invalid balance response	Blocked
 Kill state already latched	Blocked
 
-This is deliberately conservative.
+The intended behavior is:
+
+Broker unavailable
+       │
+       ▼
+Balance unknown
+       │
+       ▼
+Trading BLOCKED
+
+rather than allowing the strategy to continue operating without verified account state.
 
 ⸻
 
-Safety State Machine
+Protected Order Paths
+
+Safety checks are integrated into the major live-order paths:
+
+* Normal orders
+* Basket orders
+* Split orders
+* Smart orders
+
+             Order Request
+                  │
+                  ▼
+          ┌───────────────┐
+          │  Safety Check │
+          └───────┬───────┘
+                  │
+           ┌──────┴──────┐
+           │             │
+         SAFE          BLOCKED
+           │             │
+           ▼             ▼
+       Broker API       Stop
+
+The safety boundary is implemented at the execution layer rather than relying on every strategy to perform its own safety checks.
+
+⸻
+
+Emergency Shutdown
+
+When the kill switch transitions into the killed state, Trade AI can initiate an emergency sequence:
+
+1. Cancel pending orders
+2. Attempt to close open positions
+3. Persist the KILLED state
+4. Block subsequent live orders
+
+The emergency sequence has been tested using mocked broker operations.
+
+Real broker-side cancellation and position-closing behavior should be independently validated under controlled conditions before relying on it with significant capital.
+
+⸻
+
+Background Safety Monitor
+
+Trade AI includes a dedicated background monitor:
+
+services/kill_switch_monitor.py
+
+Current polling interval:
+
+15 seconds
+
+The monitor checks:
+
+* Broker authentication
+* Account availability
+* Available balance
+* Kill-switch state
+
+It runs independently through systemd:
+
+openalgo-kill-switch.service
+
+This separates account-safety monitoring from the trading strategy process.
+
+⸻
+
+Kill Switch State Machine
 
                  ┌─────────────────────┐
                  │       ACTIVE        │
@@ -295,13 +219,23 @@ There is intentionally no automatic transition from KILLED back to ACTIVE.
 
 ⸻
 
+Safety Components
+
+Component	Responsibility
+trading_kill_switch.py	Balance verification and persistent kill state
+live_order_guard.py	Blocks unsafe live orders
+kill_switch_monitor.py	Background account monitoring
+kill_switch_emergency.py	Emergency cancellation and position-closing sequence
+reset_kill_switch.py	Controlled manual recovery
+
+⸻
+
 Project Structure
 
 trade-ai/
 │
 ├── broker/
 │   └── angel/
-│       └── ...
 │
 ├── services/
 │   ├── basket_order_service.py
@@ -316,38 +250,63 @@ trade-ai/
 │   └── reset_kill_switch.py
 │
 ├── frontend/
-│   └── ...
 │
 ├── app.py
 ├── .env
 └── ...
 
-Custom safety components
+⸻
 
-Component	Responsibility
-trading_kill_switch.py	Balance verification and persistent kill state
-live_order_guard.py	Prevents unsafe live orders
-kill_switch_monitor.py	Background account monitoring
-kill_switch_emergency.py	Cancel + flatten emergency sequence
-reset_kill_switch.py	Controlled manual recovery
+Architecture
+
+                         ┌─────────────────────┐
+                         │   Trading Strategy  │
+                         │     / Trading Bot   │
+                         └──────────┬──────────┘
+                                    │
+                                    ▼
+                         ┌─────────────────────┐
+                         │      OpenAlgo       │
+                         │   Trading Engine    │
+                         └──────────┬──────────┘
+                                    │
+                                    ▼
+                    ┌──────────────────────────────┐
+                    │       TRADE AI SAFETY        │
+                    │                              │
+                    │  Balance Verification       │
+                    │  Kill Switch                │
+                    │  Order Guard                │
+                    │  Emergency Shutdown         │
+                    │  Persistent Kill State      │
+                    └──────────────┬───────────────┘
+                                   │
+                                   ▼
+                         ┌─────────────────────┐
+                         │   Angel One         │
+                         │   SmartAPI          │
+                         └─────────────────────┘
 
 ⸻
 
 Infrastructure
 
-Trade AI currently runs on an Oracle Cloud Ubuntu server.
+Trade AI currently runs as a self-hosted deployment.
 
-OS              Ubuntu 22.04 LTS
-Architecture    x86_64
-Python          3.12.11
-Node.js         24.13.0
-npm             11.6.2
-Web Server      Nginx
-Application     OpenAlgo
-Process Manager systemd
-Broker          Angel One SmartAPI
+Component	Technology
+Cloud	Oracle Cloud
+Operating System	Ubuntu 22.04 LTS
+Architecture	x86_64
+Application	OpenAlgo
+Broker	Angel One SmartAPI
+Web Server	Nginx
+Process Manager	systemd
+Backend Runtime	Python 3.12
+Frontend Runtime	Node.js 24
+Frontend	React
+Database	OpenAlgo storage layer
 
-Application architecture:
+Application Flow
 
 Internet
    │
@@ -357,78 +316,110 @@ Internet
    ▼
 OpenAlgo
    │
-   ├───────────────┐
-   ▼               ▼
-Trading Engine   Safety Layer
-   │               │
-   └───────┬───────┘
-           ▼
+   ├──────────────────┐
+   ▼                  ▼
+Trading Engine    Trade AI Safety
+   │                  │
+   └────────┬─────────┘
+            ▼
       Angel One API
 
 ⸻
 
-Reliability Philosophy
+Technology Stack
 
-Trade AI is built around several simple principles.
+Trading Infrastructure
 
-1. Strategy and safety are separate
+* OpenAlgo
+* Angel One SmartAPI
+* Python
+* React
+* Nginx
+* systemd
+* Oracle Cloud
 
-Strategies should decide what to trade.
+Safety Layer
 
-The safety layer decides whether trading is permitted.
+* Persistent kill-switch state
+* Balance verification
+* Live-order guards
+* Background monitoring
+* Emergency shutdown sequence
+* Explicit manual recovery
 
-2. Fail closed
+Development & Quality
 
-If account safety cannot be verified, don’t trade.
+* GitHub Actions
+* Python testing
+* Frontend linting
+* Frontend build validation
+* Playwright
+* Bandit
+* pip-audit
 
-3. Kill states persist
+⸻
 
-A restart should not accidentally revive a disabled trading system.
+CI & Security
 
-4. Recovery requires verification
+Trade AI uses GitHub Actions for automated project verification.
 
-Returning to trading requires an explicit reset after a successful account check.
+CI
 
-5. Test without touching the broker
+The CI workflow validates major backend and frontend components, including:
 
-Safety-critical functions are designed so their behavior can be tested using mocked broker operations before real-money execution is enabled.
+* Backend checks
+* Backend tests
+* Frontend linting
+* Frontend tests
+* Frontend builds
+* End-to-end testing
+* Security-related checks
+
+Security
+
+The dedicated security workflow runs:
+
+* Bandit security scanning
+* pip-audit
+* SARIF security reporting
+* Artifact generation for security reports
+
+Security scanning runs on pushes to main, pull requests, and the scheduled weekly security run.
 
 ⸻
 
 Testing
 
-The safety system has been tested for:
+The safety system has been tested for the following behaviors.
 
-Balance lifecycle
+Balance Lifecycle
 
 ₹10,000 → ALLOWED
 ₹0      → KILLED
 ₹5,000  → STILL KILLED
 
-Restart persistence
+Restart Persistence
 
 The kill state survives:
 
 * OpenAlgo restart
 * Kill-switch monitor restart
 
-Order blocking
+Order Blocking
 
 A mocked broker execution path confirms that the broker order function is not reached while the kill switch is active.
 
-Emergency sequence
+Emergency Sequence
 
 The cancellation → position-closing sequence has been tested with mocked broker functions.
 
-Real emergency cancellation/flattening should still be independently validated under controlled conditions before relying on it with significant capital.
+Real broker emergency behavior requires separate controlled validation.
 
 ⸻
 
 Security
 
-Never commit secrets.
-
-The repository intentionally excludes local runtime state and sensitive credentials.
+Never commit credentials or private infrastructure secrets.
 
 Do not commit:
 
@@ -447,50 +438,84 @@ Never place the following in source control:
 * Passwords
 * JWT secrets
 
-Use environment variables or the application’s secure credential storage instead.
+Use environment variables or the application’s secure credential storage.
+
+⸻
+
+Recovery
+
+The kill switch is intentionally persistent.
+
+Example:
+
+₹10,000
+   │
+   ▼
+ACTIVE
+   │
+   ▼
+₹0
+   │
+   ▼
+KILLED
+   │
+   ▼
+₹5,000 deposited
+   │
+   ▼
+STILL KILLED
+
+Recovery requires an explicit reset operation.
+
+The reset operation must first verify a positive account balance and active broker authentication before clearing the kill state.
 
 ⸻
 
 Development Status
 
-Trade AI is currently an active development project.
+Trade AI is an active development project.
 
-The current implementation focuses on:
+Current focus:
 
 * Broker connectivity
 * Automated execution infrastructure
-* Order protection
+* Live-order protection
 * Balance monitoring
 * Fail-closed behavior
 * Persistent kill state
 * Emergency shutdown
 * Server-side reliability
 
-Strategy research and automated strategy selection are separate concerns from the execution safety layer.
+Strategy research and automated strategy selection are separate from the execution safety layer.
 
 ⸻
 
 Roadmap
 
-Potential future areas include:
+Completed
 
-[✓] OpenAlgo deployment
-[✓] Angel One integration
-[✓] Production process management
-[✓] Live order safety guard
-[✓] Balance-based kill switch
-[✓] Persistent KILLED state
-[✓] Background monitoring
-[✓] Emergency shutdown sequence
-[✓] Manual recovery mechanism
-[ ] Comprehensive integration test suite
-[ ] Broker failure simulation
-[ ] Order-state reconciliation
-[ ] Execution audit trail
-[ ] Advanced risk limits
-[ ] Strategy validation framework
-[ ] Paper-trading environment
-[ ] Performance analytics
+* [x]	OpenAlgo deployment
+* [x]	Angel One integration
+* [x]	Production process management
+* [x]	Live order safety guard
+* [x]	Balance-based kill switch
+* [x]	Persistent KILLED state
+* [x]	Background monitoring
+* [x]	Emergency shutdown sequence
+* [x]	Manual recovery mechanism
+* [x]	CI workflow
+* [x]	Security workflow
+
+Planned
+
+* [ ]	Comprehensive integration test suite
+* [ ]	Broker failure simulation
+* [ ]	Order-state reconciliation
+* [ ]	Execution audit trail
+* [ ]	Advanced risk limits
+* [ ]	Strategy validation framework
+* [ ]	Paper-trading environment
+* [ ]	Performance analytics
 
 ⸻
 
@@ -535,31 +560,17 @@ Built around:
 
 ⸻
 
-Core Idea
+License
 
-        AUTOMATED TRADING
-               │
-               ▼
-        ┌──────────────┐
-        │   OPENALGO   │
-        └──────┬───────┘
-               │
-               ▼
-       ┌─────────────────┐
-       │   TRADE AI      │
-       │  SAFETY LAYER   │
-       └────────┬────────┘
-                │
-        ┌───────┴───────┐
-        │               │
-      SAFE            UNSAFE
-        │               │
-        ▼               ▼
-     EXECUTE           KILL
-        │               │
-        ▼               ├── CANCEL
-     BROKER             ├── FLATTEN
-                        └── LOCK
+This project follows the licensing terms of its underlying OpenAlgo codebase and its applicable dependencies.
 
-The strategy decides what to do.
-The safety layer decides whether it is allowed to do it.
+⸻
+
+<div align="center">
+
+Trade AI
+
+Self-hosted algorithmic trading infrastructure with an independent execution-safety layer.
+
+</div>
+```
