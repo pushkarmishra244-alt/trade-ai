@@ -1,0 +1,69 @@
+name: Supply Chain Verification
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-attest:
+    name: Build and Attest
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Package build artifact
+        run: tar -czf trade-ai-frontend-dist.tar.gz -C frontend dist
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: frontend/dist
+          format: spdx-json
+          output-file: trade-ai-frontend-dist.sbom.spdx.json
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: trade-ai-frontend-dist
+          path: trade-ai-frontend-dist.tar.gz
+          retention-days: 30
+
+      - name: Generate build provenance attestation
+        uses: actions/attest@v4
+        with:
+          subject-path: trade-ai-frontend-dist.tar.gz
+
+      - name: Generate SBOM attestation
+        uses: actions/attest@v4
+        with:
+          subject-path: trade-ai-frontend-dist.tar.gz
+          sbom-path: trade-ai-frontend-dist.sbom.spdx.json
