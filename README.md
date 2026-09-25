@@ -1,6 +1,3 @@
-Yes. The previous README reads like technical documentation. For a GitHub repository, Trade AI should feel like a serious engineering project first, with the safety architecture as the centerpiece.
-
-Here is a more polished version you can use directly:
 
 # Trade AI
 > Automated trading infrastructure with a hard safety boundary between strategy logic and real-money execution.
