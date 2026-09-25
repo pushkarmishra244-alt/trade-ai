@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   build-attest:
-    name: Build and Attest
+    name: Supply chain verification
     runs-on: ubuntu-latest
 
     permissions:

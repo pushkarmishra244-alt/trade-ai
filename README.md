@@ -31,8 +31,9 @@ OpenAlgo
                │
                ▼
         Angel One SmartAPI
+```
 
-What is Trade AI?
+## What is Trade AI?
 
 Automated trading systems can continue operating even when their operating conditions are no longer safe.
 
@@ -570,4 +571,3 @@ Trade AI
 Self-hosted algorithmic trading infrastructure with an independent execution-safety layer.
 
 </div>
-```

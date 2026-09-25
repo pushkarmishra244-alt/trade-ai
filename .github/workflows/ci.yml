@@ -262,3 +262,35 @@ jobs:
           git add -f frontend/dist/ ':(exclude)frontend/dist/*.gz' ':(exclude)frontend/dist/*.br'
           git diff --staged --quiet || git commit -m "chore: auto-build frontend dist [skip ci]"
           git push
+
+  # Required aggregate status check for the protected main branch.
+  ci-gate:
+    name: CI
+    if: always()
+    needs:
+      - backend-lint
+      - backend-test
+      - frontend-lint
+      - chart-indicator-skill
+      - openscript-skill
+      - frontend-build
+      - frontend-test
+      - frontend-e2e
+      - security-scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify required CI jobs
+        run: |
+          if [[ "${{ needs.backend-lint.result }}" != "success" ||
+                "${{ needs.backend-test.result }}" != "success" ||
+                "${{ needs.frontend-lint.result }}" != "success" ||
+                "${{ needs.chart-indicator-skill.result }}" != "success" ||
+                "${{ needs.openscript-skill.result }}" != "success" ||
+                "${{ needs.frontend-build.result }}" != "success" ||
+                "${{ needs.frontend-test.result }}" != "success" ||
+                "${{ needs.frontend-e2e.result }}" != "success" ||
+                "${{ needs.security-scan.result }}" != "success" ]]; then
+            echo "One or more required CI jobs did not succeed."
+            exit 1
+          fi
+          echo "All required CI jobs succeeded."
