@@ -1,5 +1,11 @@
 
 # Trade AI
+
+[![CI](https://github.com/pushkarmishra244-alt/trade-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/pushkarmishra244-alt/trade-ai/actions/workflows/ci.yml)
+[![Security](https://img.shields.io/github/actions/workflow/status/pushkarmishra244-alt/trade-ai/security.yml?label=Security)](https://github.com/pushkarmishra244-alt/trade-ai/actions/workflows/security.yml)
+[![Last Commit](https://img.shields.io/github/last-commit/pushkarmishra244-alt/trade-ai)](https://github.com/pushkarmishra244-alt/trade-ai/commits/main)
+
+> Automated trading infrastructure with a hard safety boundary between strategy logic and real-money execution.
 > Automated trading infrastructure with a hard safety boundary between strategy logic and real-money execution.
 Trade AI is a self-hosted algorithmic trading system built around [OpenAlgo](https://github.com/marketcalls/openalgo) and Angel One SmartAPI.
 The project is focused on one problem that matters when automated software is connected to a real brokerage account:
