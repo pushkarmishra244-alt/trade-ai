@@ -4,6 +4,7 @@ from typing import Any, Dict, Optional, Tuple
 
 from database.auth_db import get_auth_token_broker
 from database.settings_db import get_analyze_mode
+from services.live_order_guard import check_live_order_allowed
 from events import AnalyzerErrorEvent, OrderFailedEvent, OrderPlacedEvent
 from restx_api.schemas import OrderSchema
 from utils.constants import (
@@ -215,6 +216,27 @@ def place_order_with_auth(
             )
         )
         return False, error_response, 404
+
+    # HARD KILL SWITCH: block all live orders when account safety check fails.
+    allowed, guard_response = check_live_order_allowed(api_key)
+    if not allowed:
+        error_response = {
+            "status": "error",
+            "message": guard_response["message"],
+        }
+        bus.publish(
+            OrderFailedEvent(
+                mode="live",
+                api_type="placeorder",
+                request_data=order_request_data,
+                response_data=error_response,
+                api_key=api_key,
+                symbol=order_data.get("symbol", ""),
+                exchange=order_data.get("exchange", ""),
+                error_message=guard_response["message"],
+            )
+        )
+        return False, error_response, 403
 
     try:
         res, response_data, order_id = broker_module.place_order_api(order_data, auth_token)

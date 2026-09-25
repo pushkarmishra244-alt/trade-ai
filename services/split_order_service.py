@@ -458,6 +458,12 @@ def split_order(
             # Skip logging for invalid API keys to prevent database flooding
             return False, error_response, 403
 
+        from services.live_order_guard import check_live_order_allowed
+
+        allowed, guard_response = check_live_order_allowed(api_key)
+        if not allowed:
+            return False, guard_response, 403
+
         return split_order_with_auth(split_data, AUTH_TOKEN, broker_name, original_data)
 
     # Case 2: Direct internal call with auth_token and broker

@@ -134,6 +134,20 @@ def place_single_order(
         Order result dictionary
     """
     try:
+        # HARD KILL SWITCH: block every live basket leg.
+        from services.live_order_guard import check_live_order_allowed
+
+        api_key = order_data.get("apikey", "")
+        allowed, guard_response = check_live_order_allowed(api_key)
+        if not allowed:
+            return {
+                "symbol": order_data.get("symbol", ""),
+                "exchange": order_data.get("exchange", ""),
+                "product": order_data.get("product", ""),
+                "status": "error",
+                "message": guard_response["message"],
+            }
+
         # Place the order
         res, response_data, order_id = broker_module.place_order_api(order_data, auth_token)
 
@@ -423,6 +437,12 @@ def place_basket_order(
             error_response = {"status": "error", "message": "Invalid openalgo apikey"}
             # Skip logging for invalid API keys to prevent database flooding
             return False, error_response, 403
+
+        from services.live_order_guard import check_live_order_allowed
+
+        allowed, guard_response = check_live_order_allowed(api_key)
+        if not allowed:
+            return False, guard_response, 403
 
         return process_basket_order_with_auth(basket_data, AUTH_TOKEN, broker_name, original_data)
 

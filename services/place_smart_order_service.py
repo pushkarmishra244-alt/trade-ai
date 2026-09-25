@@ -207,6 +207,27 @@ def place_smart_order_with_auth(
         ))
         return False, error_response, 404
 
+    # HARD KILL SWITCH: block all live smart orders when account safety check fails.
+    from services.live_order_guard import check_live_order_allowed
+
+    allowed, guard_response = check_live_order_allowed(api_key)
+    if not allowed:
+        error_response = {
+            "status": "error",
+            "message": guard_response["message"],
+        }
+        bus.publish(OrderFailedEvent(
+            mode="live",
+            api_type="placesmartorder",
+            request_data=order_request_data,
+            response_data=error_response,
+            api_key=api_key,
+            symbol=order_data.get("symbol", ""),
+            exchange=order_data.get("exchange", ""),
+            error_message=guard_response["message"],
+        ))
+        return False, error_response, 403
+
     try:
         res, response_data, order_id = broker_module.place_smartorder_api(order_data, auth_token)
 
