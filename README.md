@@ -1,13 +1,16 @@
 # Trade AI
-<div align="center">
+
 [![CI](https://github.com/pushkarmishra244-alt/trade-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/pushkarmishra244-alt/trade-ai/actions/workflows/ci.yml)
 [![Security](https://img.shields.io/github/actions/workflow/status/pushkarmishra244-alt/trade-ai/security.yml?label=Security)](https://github.com/pushkarmishra244-alt/trade-ai/actions/workflows/security.yml)
 [![Last Commit](https://img.shields.io/github/last-commit/pushkarmishra244-alt/trade-ai)](https://github.com/pushkarmishra244-alt/trade-ai/commits/main)
-[![GitHub Repo](https://img.shields.io/badge/GitHub-Repository-181717?logo=github)](https://github.com/pushkarmishra244-alt/trade-ai)
-</div>
+[![GitHub](https://img.shields.io/badge/GitHub-Repository-181717?logo=github)](https://github.com/pushkarmishra244-alt/trade-ai)
+
 > Self-hosted algorithmic trading infrastructure with a fail-closed safety layer between strategy execution and real-money brokerage operations.
-Trade AI is a self-hosted trading infrastructure project built around **OpenAlgo** and **Angel One SmartAPI**.
+
+Trade AI is a self-hosted algorithmic trading system built around **OpenAlgo** and **Angel One SmartAPI**.
+
 Its primary purpose is to establish an independent safety boundary between automated strategy logic and live broker execution.
+
 ```text
 Strategy
    │
@@ -28,12 +31,6 @@ OpenAlgo
                │
                ▼
         Angel One SmartAPI
-
-The strategy decides what to trade.
-
-The safety layer decides whether the trade is allowed to reach the broker.
-
-⸻
 
 What is Trade AI?
 
