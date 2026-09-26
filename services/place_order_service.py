@@ -5,6 +5,7 @@ from typing import Any, Dict, Optional, Tuple
 from database.auth_db import get_auth_token_broker
 from database.settings_db import get_analyze_mode
 from services.live_order_guard import check_live_order_allowed
+from services.jev_service import JevError, require_jev_allow
 from events import AnalyzerErrorEvent, OrderFailedEvent, OrderPlacedEvent
 from restx_api.schemas import OrderSchema
 from utils.constants import (
@@ -234,6 +235,42 @@ def place_order_with_auth(
                 symbol=order_data.get("symbol", ""),
                 exchange=order_data.get("exchange", ""),
                 error_message=guard_response["message"],
+            )
+        )
+        return False, error_response, 403
+
+    # JEV DECISION GATE: consequential live orders require an explicit allow.
+    try:
+        require_jev_allow(
+            tool="trade_ai",
+            action="place_live_order",
+            arguments_summary=[
+                f"symbol={order_data.get('symbol', '')}",
+                f"exchange={order_data.get('exchange', '')}",
+                f"action={order_data.get('action', '')}",
+                f"quantity={order_data.get('quantity', '')}",
+                f"price_type={order_data.get('price_type', order_data.get('pricetype', ''))}",
+            ],
+            side_effects=["places a live broker order"],
+            safeguards=["Trade AI kill switch", "live order guard"],
+            policy=["only explicit Jev allow may proceed"],
+            reversibility="partially_reversible",
+        )
+    except JevError as exc:
+        error_response = {
+            "status": "error",
+            "message": f"Jev blocked live order: {exc}",
+        }
+        bus.publish(
+            OrderFailedEvent(
+                mode="live",
+                api_type="placeorder",
+                request_data=order_request_data,
+                response_data=error_response,
+                api_key=api_key,
+                symbol=order_data.get("symbol", ""),
+                exchange=order_data.get("exchange", ""),
+                error_message=str(exc),
             )
         )
         return False, error_response, 403

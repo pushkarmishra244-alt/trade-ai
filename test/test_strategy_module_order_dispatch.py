@@ -297,6 +297,11 @@ def test_a_live_order_is_not_diverted_by_the_platform_analyzer_toggle():
         patch("services.place_order_service.get_analyze_mode", return_value=True),
         patch("services.sandbox_service.sandbox_place_order") as sandbox,
         patch("services.place_order_service.import_broker_module") as import_broker,
+        patch(
+            "services.place_order_service.check_live_order_allowed",
+            return_value=(True, {"status": "success", "availablecash": 10000}),
+        ),
+        patch("services.place_order_service.require_jev_allow"),
         # The symbol is not in this suite's throwaway master contract, and an
         # order that fails validation never reaches the branch under test.
         patch(
@@ -319,6 +324,91 @@ def test_a_live_order_is_not_diverted_by_the_platform_analyzer_toggle():
     assert broker_module.place_order_api.call_count == 1
     assert result.ok is True
     assert result.broker_order_id == "BROKER-1"
+
+
+def test_live_order_requires_jev_allow_before_broker_call():
+    with (
+        patch("services.place_order_service.get_analyze_mode", return_value=False),
+        patch("services.place_order_service.import_broker_module") as import_broker,
+        patch("services.place_order_service.check_live_order_allowed",
+              return_value=(True, {"status": "success", "availablecash": 10000})),
+        patch("services.place_order_service.require_jev_allow") as jev,
+    ):
+        broker_module = import_broker.return_value
+        broker_module.place_order_api.return_value = (
+            SimpleNamespace(status=200),
+            {"status": "success"},
+            "BROKER-1",
+        )
+
+        result = services.place_order_service.place_order_with_auth(
+            _order(),
+            "tok",
+            "zerodha",
+            {"apikey": "k"},
+            force_live=True,
+        )
+
+    assert result[0] is True
+    jev.assert_called_once()
+    broker_module.place_order_api.assert_called_once()
+
+
+def test_live_order_is_blocked_when_jev_denies():
+    from services.jev_service import JevError
+
+    with (
+        patch("services.place_order_service.get_analyze_mode", return_value=False),
+        patch("services.place_order_service.import_broker_module") as import_broker,
+        patch("services.place_order_service.check_live_order_allowed",
+              return_value=(True, {"status": "success", "availablecash": 10000})),
+        patch(
+            "services.place_order_service.require_jev_allow",
+            side_effect=JevError("Jev blocked action: deny"),
+        ),
+    ):
+        broker_module = import_broker.return_value
+
+        result = services.place_order_service.place_order_with_auth(
+            _order(),
+            "tok",
+            "zerodha",
+            {"apikey": "k"},
+            force_live=True,
+        )
+
+    assert result[0] is False
+    assert result[2] == 403
+    broker_module.place_order_api.assert_not_called()
+
+
+def test_live_order_is_blocked_by_kill_switch_before_jev():
+    with (
+        patch("services.place_order_service.get_analyze_mode", return_value=False),
+        patch("services.place_order_service.import_broker_module") as import_broker,
+        patch(
+            "services.place_order_service.check_live_order_allowed",
+            return_value=(
+                False,
+                {"status": "error", "message": "Kill switch: Trading blocked"},
+            ),
+        ),
+        patch("services.place_order_service.require_jev_allow") as jev,
+    ):
+        broker_module = import_broker.return_value
+
+        result = services.place_order_service.place_order_with_auth(
+            _order(),
+            "tok",
+            "zerodha",
+            {"apikey": "k"},
+            force_live=True,
+        )
+
+    assert result[0] is False
+    assert result[2] == 403
+    jev.assert_not_called()
+    broker_module.place_order_api.assert_not_called()
 
 
 def test_a_sandbox_order_still_goes_to_the_sandbox_with_the_toggle_off():
