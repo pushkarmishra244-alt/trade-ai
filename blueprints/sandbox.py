@@ -826,10 +826,10 @@ def validate_config(config_key, config_value):
 
                 # Additional validations
                 if config_key == "starting_capital":
-                    valid_capitals = [100000, 500000, 1000000, 2500000, 5000000, 10000000]
+                    valid_capitals = [10000, 100000, 500000, 1000000, 2500000, 5000000, 10000000]
                     if value not in valid_capitals:
                         return (
-                            "Starting capital must be one of: ₹1L, ₹5L, ₹10L, ₹25L, ₹50L, or ₹1Cr"
+                            "Starting capital must be one of: ₹10K, ₹1L, ₹5L, ₹10L, ₹25L, ₹50L, or ₹1Cr"
                         )
 
                 if config_key.endswith("_leverage"):
