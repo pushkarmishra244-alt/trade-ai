@@ -6,6 +6,8 @@ import httpx
 JEV_API_URL = "https://www.jevai.org/api/v1/decisions/tool-guard"
 JEV_TIMEOUT = 10.0
 
+ALLOWED_DECISIONS = {"allow", "confirm", "review", "deny"}
+
 
 class JevError(Exception):
     """Raised when Jev cannot provide a valid decision."""
@@ -35,6 +37,8 @@ def guard_tool_call(
 
     Jev only provides a decision. It never executes the action.
     The Trade AI safety layer remains authoritative.
+
+    Any Jev error is raised as JevError so callers can fail closed.
     """
 
     api_key = _get_api_key()
@@ -66,9 +70,7 @@ def guard_tool_call(
         raise JevError("Jev rate limit reached; retry later")
 
     if response.status_code != 200:
-        raise JevError(
-            f"Jev returned HTTP {response.status_code}"
-        )
+        raise JevError(f"Jev returned HTTP {response.status_code}")
 
     try:
         body = response.json()
@@ -85,7 +87,7 @@ def guard_tool_call(
 
     decision = data.get("decision")
 
-    if decision not in {"allow", "confirm", "review", "deny"}:
+    if decision not in ALLOWED_DECISIONS:
         raise JevError("Jev returned an invalid decision")
 
     return {
@@ -95,4 +97,24 @@ def guard_tool_call(
         "guidance": data.get("guidance", ""),
         "guidance_source": data.get("guidance_source", ""),
         "answers": data.get("answers", {}),
+        "needs_confirmation": data.get("needs_confirmation"),
+        "risk": data.get("risk"),
     }
+
+
+def require_jev_allow(**kwargs: Any) -> dict[str, Any]:
+    """
+    Fail-closed authorization wrapper for consequential actions.
+
+    Only an explicit Jev 'allow' decision permits the caller to continue.
+    confirm/review/deny and every Jev failure raise JevError.
+    """
+
+    result = guard_tool_call(**kwargs)
+
+    if result["decision"] != "allow":
+        raise JevError(
+            f"Jev blocked action: {result['decision']}"
+        )
+
+    return result
