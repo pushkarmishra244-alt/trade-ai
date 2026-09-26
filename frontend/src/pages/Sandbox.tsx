@@ -55,6 +55,7 @@ const DAYS_OF_WEEK = [
 ]
 
 const CAPITAL_OPTIONS = [
+  { value: '10000', label: '10,000 (10 Thousand)' },
   { value: '100000', label: '1,00,000 (1 Lakh)' },
   { value: '500000', label: '5,00,000 (5 Lakhs)' },
   { value: '1000000', label: '10,00,000 (10 Lakhs)' },
